@@ -1,4 +1,4 @@
-import gradio as gr
+import gradio as gr 
 import numpy as np
 import random
 from diffusers import DiffusionPipeline
@@ -12,27 +12,21 @@ pipe = DiffusionPipeline.from_pretrained(
     torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
 ).to(device)
 
-# Constants
-MAX_SEED = np.iinfo(np.int32).max
-MAX_IMAGE_SIZE = 1024
-
-# Inference function
-def infer(prompt, negative_prompt, seed, randomize_seed, width, height, guidance_scale, num_inference_steps, progress=gr.Progress(track_tqdm=True)):
-    if randomize_seed:
-        seed = random.randint(0, MAX_SEED)
-
+# Inference function (simplified)
+def infer(prompt, progress=gr.Progress(track_tqdm=True)):
+    seed = random.randint(0, np.iinfo(np.int32).max)
     generator = torch.Generator().manual_seed(seed)
+
     image = pipe(
         prompt=prompt,
-        negative_prompt=negative_prompt,
-        guidance_scale=guidance_scale,
-        num_inference_steps=num_inference_steps,
-        width=width,
-        height=height,
+        guidance_scale=0.0,
+        num_inference_steps=2,
+        width=1024,
+        height=1024,
         generator=generator,
     ).images[0]
 
-    return image, seed
+    return image
 
 # Prompt examples
 examples = [
@@ -64,7 +58,7 @@ button.primary {
 # UI layout
 with gr.Blocks(css=css) as demo:
     with gr.Column(elem_id="main-container"):
-        gr.Markdown("# 🎨 Text-to-Image Generator with SDXL Turbo")
+        gr.Markdown("Text to Image")
 
         with gr.Row():
             prompt = gr.Textbox(placeholder="Enter your prompt...", label="Prompt", lines=1)
@@ -72,35 +66,13 @@ with gr.Blocks(css=css) as demo:
 
         result = gr.Image(label="", show_label=False, type="pil")
 
-        with gr.Accordion("⚙️ Advanced Settings", open=False):
-            negative_prompt = gr.Textbox(placeholder="Optional negative prompt", label="Negative Prompt", lines=1)
-            seed = gr.Slider(label="Seed", minimum=0, maximum=MAX_SEED, step=1, value=0)
-            randomize_seed = gr.Checkbox(label="🎲 Randomize seed", value=True)
-
-            with gr.Row():
-                width = gr.Slider(label="Width", minimum=256, maximum=MAX_IMAGE_SIZE, step=32, value=1024)
-                height = gr.Slider(label="Height", minimum=256, maximum=MAX_IMAGE_SIZE, step=32, value=1024)
-
-            with gr.Row():
-                guidance_scale = gr.Slider(label="Guidance Scale", minimum=0.0, maximum=10.0, step=0.1, value=0.0)
-                num_inference_steps = gr.Slider(label="Inference Steps", minimum=1, maximum=50, step=1, value=2)
-
         gr.Examples(examples=examples, inputs=[prompt])
 
     gr.on(
         triggers=[run_button.click, prompt.submit],
         fn=infer,
-        inputs=[
-            prompt,
-            negative_prompt,
-            seed,
-            randomize_seed,
-            width,
-            height,
-            guidance_scale,
-            num_inference_steps,
-        ],
-        outputs=[result, seed],
+        inputs=[prompt],
+        outputs=[result],
     )
 
 if __name__ == "__main__":
