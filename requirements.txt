@@ -1,7 +1,5 @@
-accelerate
-diffusers
-invisible_watermark
-torch
-transformers
-xformers
 gradio
+torch
+diffusers
+transformers
+safetensors

@@ -1,80 +1,83 @@
-import gradio as gr
-import numpy as np
-import torch
-import random
 from diffusers import DiffusionPipeline
+import torch
+import gradio as gr
+from PIL import Image
+import uuid
+import os
+import time
 
-# 📦 Configuration du modèle
+# Configurer le modèle
 device = "cuda" if torch.cuda.is_available() else "cpu"
 pipe = DiffusionPipeline.from_pretrained(
     "stabilityai/sdxl-turbo",
-    torch_dtype=torch.float16 if device == "cuda" else torch.float32
+    torch_dtype=torch.float16 if device == "cuda" else torch.float32,
 ).to(device)
 
-# 🔧 Paramètres rapides
-WIDTH = 512
-HEIGHT = 512
-INFERENCE_STEPS = 2
-GUIDANCE_SCALE = 0.0
+# Répertoire temporaire pour sauvegarde
+OUTPUT_DIR = "generated"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# 🧠 Fonction de génération
-def infer(prompt):
-    seed = random.randint(0, np.iinfo(np.int32).max)
-    generator = torch.Generator(device=device).manual_seed(seed)
+# Fonction principale
+def generate_image(prompt, progress=gr.Progress(track_tqdm=True)):
+    progress(0, desc="Initialisation...")
+    time.sleep(0.5)
+
+    for i in range(5):
+        time.sleep(0.2)
+        progress((i+1)/6, desc=f"Génération étape {i+1}/5...")
 
     image = pipe(
         prompt=prompt,
-        guidance_scale=GUIDANCE_SCALE,
-        num_inference_steps=INFERENCE_STEPS,
-        width=WIDTH,
-        height=HEIGHT,
-        generator=generator
+        width=384,
+        height=384,
+        num_inference_steps=2,
+        guidance_scale=0.0,
     ).images[0]
 
-    return image
+    filename = f"{uuid.uuid4().hex[:8]}.png"
+    filepath = os.path.join(OUTPUT_DIR, filename)
+    image.save(filepath)
 
-# 🌟 Exemples
-examples = [
-    "A dreamy forest with glowing mushrooms",
-    "A futuristic city at sunset, cyberpunk style",
-    "A cat wearing astronaut gear on Mars",
-]
+    return image, filepath, gr.update(visible=True)
 
-# 🎨 CSS simple
-css = """
-#main-container {
-    max-width: 750px;
-    margin: auto;
-}
-h1 {
+# Interface Gradio (sans bouton secondaire de téléchargement)
+with gr.Blocks(css="""
+#app-container { max-width: 800px; margin: auto; }
+.gradio-container.gradio-container-5-30-0 .contain h1 {
     text-align: center;
-    font-size: 2.2rem;
-    font-weight: bold;
-    margin-bottom: 1rem;
+    font-size: 4rem;
+    margin: 3rem 0;
+    color: #144d8d;
 }
-button.primary {
-    background: linear-gradient(to right, #6366F1, #8B5CF6);
-    color: white;
-    border-radius: 10px;
-    padding: 0.5rem 1.5rem;
-}
-"""
+button.primary { background: linear-gradient(to right, rgb(25 116 220), rgb(127 184 247)); color: white; border-radius: 10px; }
+""") as demo:
+    with gr.Column(elem_id="app-container"):
+        gr.Image(value="logo.png", show_label=False, container=False)
+        gr.Markdown("# Text to Image Projet")
 
-# 🖼️ Interface Gradio
-with gr.Blocks(css=css) as demo:
-    with gr.Column(elem_id="main-container"):
-        gr.Markdown(" Text to Image ")
-        
         with gr.Row():
-            prompt = gr.Textbox(placeholder="Enter your prompt...", label="Prompt")
-            generate_btn = gr.Button("Generate", elem_classes=["primary"])
+            prompt = gr.Textbox(label="Prompt", placeholder="e.g. A robot cat on the beach", lines=1)
 
-        output = gr.Image(type="pil", label="Generated Image")
+        with gr.Row():
+            generate_btn = gr.Button("Generate Image", elem_classes=["primary"])
 
-        gr.Examples(examples=examples, inputs=[prompt])
+        output_img = gr.Image(label="Generated Image", type="pil")
+        download_file = gr.File(label="⬇️ Click to Download Image", visible=False)
 
-    generate_btn.click(fn=infer, inputs=[prompt], outputs=[output])
+        gr.Examples(
+            examples=[
+                ["A dragon flying over mountains"],
+                ["A futuristic city at sunset"],
+                ["A smiling robot in a garden"],
+            ],
+            inputs=[prompt]
+        )
 
-# 🚀 Lancement
+        generate_btn.click(
+            fn=generate_image,
+            inputs=[prompt],
+            outputs=[output_img, download_file, download_file]
+        )
+
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(share=True)
